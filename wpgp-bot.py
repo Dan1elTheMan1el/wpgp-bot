@@ -91,28 +91,28 @@ json_file.close()
 profile = bot.create_group("profile", "Manage Profile")
 
 # Command: Link friend code to user's Discord ID
-@profile.command()
-async def set(ctx, fc: str, instances: int):
-    if len(fc) != 16:
+@profile.command(description="Set your PTCGP friend code")
+async def set(ctx, friend_code: str):
+    if len(friend_code) != 16:
         await ctx.respond("Please enter your PTCGP friend code without hyphens.")
     else:
         author_id_str = str(ctx.author.id)
-        data[author_id_str] = {
-            'status': False,
-            'fc': fc,
-            'instances': instances,
-        }
+        if not author_id_str in data:
+            data[author_id_str] = {}
+        
+        data[author_id_str]['fc'] = friend_code
+        data[author_id_str]['status'] = False
 
         # Update logged data
         json_file = open('data.json', 'w')
         json.dump(data, json_file)
         json_file.close()
 
-        await ctx.respond(f"Friend code set to {fc}!")
+        await ctx.respond(f"Friend code set to {friend_code}!")
         await update_fcids(ctx.guild)
 
 # Command: Get user's profile / information
-@profile.command()
+@profile.command(description="Get user's profile / information")
 async def get(ctx, discord_id: str):
     if discord_id in data:
         if 'last_on' in data[discord_id]:
@@ -133,8 +133,9 @@ async def get(ctx, discord_id: str):
         await ctx.respond("User not found.")
 
 # Admin command: Edit user's profile
-@profile.command()
+@profile.command(description="Edit user's profile (Admin)")
 @discord.option("param",choices=["fc","status","hours",])
+@discord.option("value",description="Value to update (true/false for status)")
 async def manage(ctx, discord_id: str, param: str, value: str):
     if not ctx.author.guild_permissions.administrator:
         await ctx.respond("You do not have permission to use this command.", ephemeral=True)
@@ -157,7 +158,7 @@ async def manage(ctx, discord_id: str, param: str, value: str):
     await update_fcids(ctx.guild)
 
 # Command: Generate usernames.txt for self
-@bot.command()
+@bot.command(description="Generate usernames.txt for yourself")
 async def usernames(ctx):
     author = ctx.author.display_name
     if len(author) > 11:
@@ -173,7 +174,7 @@ async def usernames(ctx):
     await ctx.respond(file=discord_file)
 
 # Command: Update god pack thread status
-@bot.command()
+@bot.command(description="Update god pack thread status")
 @discord.option("status",choices=["Live","Dead"])
 async def gp_status(ctx, status: str):
     if not str(ctx.channel.type) == "public_thread":
@@ -186,7 +187,7 @@ async def gp_status(ctx, status: str):
     await ctx.respond("✅ Status updated!")
 
 # Command: Set own status to offline manually
-@bot.command()
+@bot.command(description="Set your status to offline")
 async def offline(ctx):
     if str(ctx.author.id) not in data:
         await ctx.respond("Please set your friend code first.", ephemeral=True)
@@ -202,7 +203,7 @@ async def offline(ctx):
     await ctx.respond("✅ Status set to offline!")
 
 # Admin command: Get full user data (for debug)
-@bot.command()
+@bot.command(description="Get full user data (Admin)")
 async def get_json(ctx, discord_id: str):
     if not ctx.author.guild_permissions.administrator:
         await ctx.respond("You do not have permission to use this command.", ephemeral=True)
