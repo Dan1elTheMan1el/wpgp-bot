@@ -14,6 +14,8 @@ DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('GUILD')
 HEARTBEAT = os.getenv('HEARTBEAT')
 PACKALERT = os.getenv('PACKALERT')
+STATUS = os.getenv('STATUS')
+
 # Pack forum related
 PACKFORUM = os.getenv('PACKFORUM')
 PACKTAG = os.getenv('PACKTAG')
@@ -77,6 +79,41 @@ async def update_fcids(guild):
     json.dump(data, json_file)
     json_file.close()
 
+# Generate online info
+def generate_online_info(guild):
+    message_part = []
+    instances = 0
+    width = 40
+    for user in data:
+        if data[user]['status']:
+            member_name = guild.get_member(int(user)).display_name
+            instance_str = f"{data[user]['instances']} Instance(s)" if 'instances' in data[user] else "N/A Instances"
+            if len(member_name) + len(instance_str) > width - 5:
+                member_name = member_name[0:(width - 8)] + "..."
+            
+            rate = '(N/A packs/min)'
+            if ('run_time' in data[user] and not data[user]['run_time'] == 0):
+                rate = f"({round(data[user]['packs']['cur'] / data[user]['run_time'] / 60, 2)} packs/min)"
+            message_part.append(f"[{'2;32m' if len(data[user]['offline']) == 0 else '0;33m'}{member_name} [2;37m{' '*(width - 1 - len(member_name) - len(instance_str))}[2;37m{instance_str}\n[2;30m{data[user]['packs']['cur']} packs in {data[user]['run_time'] if 'run_time' in data[user] else 'N/A'}h {rate}")
+            instances += data[user]['instances'] if 'instances' in data[user] else 0
+    return f"```ansi\n[1;34mTotal instances:{' '*(width - 19 - len(str(instances)))} [1;45m[1;37m {instances} [0m\n\n" + '\n'.join(message_part) + "\n```"
+
+# Update status channel
+async def update_status(guild):
+    status_channel = guild.get_channel(int(STATUS))
+    if not 'online_message' in serverdata:
+
+        online_message = await status_channel.send(generate_online_info(guild))
+        serverdata['online_message'] = int(online_message.id)
+
+        # Update logged data
+        json_file = open('serverdata.json', 'w')
+        json.dump(serverdata, json_file)
+        json_file.close()
+    else:
+        online_message = await status_channel.fetch_message(serverdata['online_message'])
+        await online_message.edit(content=generate_online_info(guild))
+    
 # Bot stuff
 intents = discord.Intents.default()
 intents.message_content = True
@@ -84,9 +121,19 @@ intents.members = True
 bot = discord.Bot(intents=intents)
 
 # Initialize data
-json_file = open('data.json')
-data = json.load(json_file)
-json_file.close()
+if os.path.isfile('data.json'):
+    json_file = open('data.json')
+    data = json.load(json_file)
+    json_file.close()
+else:
+    data = {}
+
+if os.path.isfile('serverdata.json'):
+    json_file = open('serverdata.json')
+    serverdata = json.load(json_file)
+    json_file.close()
+else:
+    serverdata = {}
 
 profile = bot.create_group("profile", "Manage Profile")
 
@@ -123,8 +170,11 @@ async def get(ctx, discord_id: str):
         else:
             days_ago = 'N/A'
             hours_ago = 'N/A'
-
-        status = 'Online' if data[discord_id]['status'] else f'Offline, last seen {days_ago} days and {hours_ago} hours ago'
+        if 'run_time' in data[discord_id]:
+            run_time = round(data[discord_id]['run_time'],1)
+        else:
+            run_time = 'N/A'
+        status = f'Online, running for {run_time}h' if data[discord_id]['status'] else f'Offline, last seen {days_ago} days and {hours_ago} hours ago'#{data[discord_id]['run_time'] if 'run_time' in data[discord_id] else 'N/A'}
         name = await bot.fetch_user(int(discord_id))
         hours = data[discord_id]['hours'] if 'hours' in data[discord_id] else 0
         packs = data[discord_id]['packs']['total'] + data[discord_id]['packs']['cur'] if 'packs' in data[discord_id] else "N/A"
@@ -160,22 +210,10 @@ async def manage(ctx, discord_id: str, param: str, value: str):
 
 stats = bot.create_group("stats", "View server statistics")
 
-# Command: Get stats of active rerollers
-@stats.command(description="Get stats of active rerollers")
-async def rerollers(ctx):
-    message = []
-    instances = 0
-    for user in data:
-        if data[user]['status']:
-            member = ctx.guild.get_member(int(user))
-            instances += data[user]['instances'] if 'instances' in data[user] else 0
-            message.append(f"**{member.display_name}**\nInstances: {data[user]['instances'] if 'instances' in data[user] else 0}")
-    await ctx.respond(f"***Total instances: {instances}***\n\n" + '\n'.join(message))
-
 # Command: Get stats of inactive rerollers
 @stats.command(description="Get stats of inactive rerollers")
 async def inactive(ctx):
-    message = []
+    message_part = []
     for user in data:
         if not data[user]['status']:
             member = ctx.guild.get_member(int(user))
@@ -185,8 +223,8 @@ async def inactive(ctx):
                 days_ago = round((now - last_on).days,1)
             else:
                 days_ago = 'N/A'
-            message.append(f"**{member.display_name}**\tLast on: **{days_ago}** days ago")
-    await ctx.respond('\n'.join(message))
+            message_part.append(f"**{member.display_name}**\tLast on: **{days_ago}** days ago")
+    await ctx.respond('\n'.join(message_part))
 
 # Command: Generate usernames.txt for self
 @bot.command(description="Generate usernames.txt for yourself")
@@ -230,8 +268,10 @@ async def offline(ctx):
     json.dump(data, json_file)
     json_file.close()
 
-    await update_fcids(ctx.guild)
     await ctx.respond("✅ Status set to offline!")
+    await update_fcids(ctx.guild)
+    await update_status(ctx.guild)
+
 
 # Admin command: Get full user data (for debug)
 @bot.command(description="Get full user data (Admin)")
@@ -279,6 +319,9 @@ async def on_message(message):
             # Update user instance count
             data[online_id]['instances'] = len(lines[1].split(',')) - 1
 
+            # Update current roll time
+            data[online_id]['run_time'] = round(int(lines[3].split('Time: ')[1].split('m')[0])/60.0,1)
+
             # Update user pack count
             if 'packs' not in data[online_id]:
                 data[online_id]['packs'] = {
@@ -298,17 +341,11 @@ async def on_message(message):
             else:
                 if 'offline' not in data[online_id]:
                     data[online_id]['offline'] = []
-                new_offlines = []
                 r_offset = -1 if lines[2].endswith('.') else -2
                 offlines = lines[2][9:r_offset].split(', ')
-                for off in offlines:
-                    if off not in data[online_id]['offline']:
-                        new_offlines.append(off)
-                data[online_id]['offline'] = new_offlines
-
-                if len(new_offlines) > 0:
-                    offlines_str = ', '.join(new_offlines)
-                    await message.channel.send(f"<@{online_id}> New instance(s) offline: {offlines_str}")
+                if not len(offlines) == len(data[online_id]['offline']):
+                    offlines_str = ', '.join(offlines)
+                    await message.channel.send(f"<@{online_id}> Instance(s) offline: {offlines_str}")
 
             # Update logged data
             json_file = open('data.json', 'w')
@@ -318,6 +355,8 @@ async def on_message(message):
             print(f"{message.guild.get_member(int(online_id)).display_name} is online!")
             await message.add_reaction("❤️")
             await update_fcids(message.guild)
+            await update_status(message.guild)
+
 
     # Pack alert channel
     elif message.channel.id == int(PACKALERT):
@@ -346,12 +385,13 @@ async def on_ready():
     print('---------------------\n')
     
     # Set bot status
-    await bot.change_presence(activity=discord.Game(name="v1.1"))
+    await bot.change_presence(activity=discord.Game(name="v1.2b"))
 
     # Begin auto update loop
     auto_update.start()
     guild = bot.get_guild(int(GUILD))
     await update_fcids(guild)
+    await update_status(guild)
 
 # Auto update loop
 @tasks.loop(minutes=2)

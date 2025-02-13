@@ -1,4 +1,4 @@
-### Version 1.0.1
+### Version 1.2b
 
 # Features
 
@@ -92,6 +92,7 @@ git clone https://github.com/Dan1elTheMan1el/tcgpbot.git
     GUILD=discord_server_id
     HEARTBEAT=heartbeat_channel_id
     PACKALERT=webhook_channel_id
+    STATUS=status_channel_id
 
     PACKFORUM=pack_forum_channel_id
     PACKTAG=unknown_pack_tag_id
