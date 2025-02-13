@@ -126,9 +126,10 @@ async def get(ctx, discord_id: str):
 
         status = 'Online' if data[discord_id]['status'] else f'Offline, last seen {days_ago} days and {hours_ago} hours ago'
         name = await bot.fetch_user(int(discord_id))
-        
         hours = data[discord_id]['hours'] if 'hours' in data[discord_id] else 0
-        await ctx.respond(f"**{name}**\nFriend code: {data[discord_id]['fc']}\nStatus: {status}\nHours farmed: {hours}\nInstances: {data[discord_id]['instances']}")
+        packs = data[discord_id]['packs']['total'] + data[discord_id]['packs']['cur'] if 'packs' in data[discord_id] else "N/A"
+        instances = data[discord_id]['instances'] if 'instances' in data[discord_id] else "N/A"
+        await ctx.respond(f"**{name}**\nFriend code: {data[discord_id]['fc']}\nStatus: {status}\nHours farmed: {hours}\nPacks farmed: {packs}\nInstances: {instances}")
     else:
         await ctx.respond("User not found.")
 
@@ -156,6 +157,36 @@ async def manage(ctx, discord_id: str, param: str, value: str):
 
     await ctx.respond(f"✅ {param} updated!")
     await update_fcids(ctx.guild)
+
+stats = bot.create_group("stats", "View server statistics")
+
+# Command: Get stats of active rerollers
+@stats.command(description="Get stats of active rerollers")
+async def rerollers(ctx):
+    message = []
+    instances = 0
+    for user in data:
+        if data[user]['status']:
+            member = ctx.guild.get_member(int(user))
+            instances += data[user]['instances'] if 'instances' in data[user] else 0
+            message.append(f"**{member.display_name}**\nInstances: {data[user]['instances'] if 'instances' in data[user] else 0}")
+    await ctx.respond(f"***Total instances: {instances}***\n\n" + '\n'.join(message))
+
+# Command: Get stats of inactive rerollers
+@stats.command(description="Get stats of inactive rerollers")
+async def inactive(ctx):
+    message = []
+    for user in data:
+        if not data[user]['status']:
+            member = ctx.guild.get_member(int(user))
+            if 'last_on' in data[user]:
+                now = datetime.datetime.now()
+                last_on = datetime.datetime.strptime(data[user]['last_on'], "%Y-%m-%d %H:%M:%S.%f")
+                days_ago = round((now - last_on).days,1)
+            else:
+                days_ago = 'N/A'
+            message.append(f"**{member.display_name}**\tLast on: **{days_ago}** days ago")
+    await ctx.respond('\n'.join(message))
 
 # Command: Generate usernames.txt for self
 @bot.command(description="Generate usernames.txt for yourself")
@@ -210,7 +241,7 @@ async def get_json(ctx, discord_id: str):
         return
     
     if discord_id in data:
-        await ctx.respond(data[discord_id])
+        await ctx.respond(f"```\n{json.dumps(data[discord_id], indent=4)}\n```")
     else:
         await ctx.respond("User not found.")
 
@@ -234,7 +265,7 @@ async def on_message(message):
                 await update_fcids(message.guild)
                 return
             
-            # Update user status / profile
+            # Update user status / last online time
             data[online_id]['status'] = True
             if 'hours' in data[online_id]:
                 now = datetime.datetime.now()
@@ -244,6 +275,40 @@ async def on_message(message):
             else:
                 data[online_id]['hours'] = 0.5
             data[online_id]['last_on'] = message.created_at.strftime("%Y-%m-%d %H:%M:%S.%f")
+
+            # Update user instance count
+            data[online_id]['instances'] = len(lines[1].split(',')) - 1
+
+            # Update user pack count
+            if 'packs' not in data[online_id]:
+                data[online_id]['packs'] = {
+                    'total': 0,
+                    'cur': 0
+                }
+            cur_packs = int(lines[3].split('Packs: ')[1])
+            if cur_packs == 0:
+                data[online_id]['packs']['total'] += data[online_id]['packs']['cur']
+                data[online_id]['packs']['cur'] = 0
+            else:
+                data[online_id]['packs']['cur'] = cur_packs
+
+            # Check for offline instances
+            if lines[2] == "Offline: none.":
+                data[online_id]['offline'] = []
+            else:
+                if 'offline' not in data[online_id]:
+                    data[online_id]['offline'] = []
+                new_offlines = []
+                r_offset = -1 if lines[2].endswith('.') else -2
+                offlines = lines[2][9:r_offset].split(', ')
+                for off in offlines:
+                    if off not in data[online_id]['offline']:
+                        new_offlines.append(off)
+                data[online_id]['offline'] = new_offlines
+
+                if len(new_offlines) > 0:
+                    offlines_str = ', '.join(new_offlines)
+                    await message.channel.send(f"<@{online_id}> New instance(s) offline: {offlines_str}")
 
             # Update logged data
             json_file = open('data.json', 'w')
@@ -279,6 +344,9 @@ async def on_ready():
     print('---------------------')
     print(f'Started bot at {datetime.datetime.now()}')
     print('---------------------\n')
+    
+    # Set bot status
+    await bot.change_presence(activity=discord.Game(name="v1.1"))
 
     # Begin auto update loop
     auto_update.start()

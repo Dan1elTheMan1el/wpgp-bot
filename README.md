@@ -25,11 +25,22 @@ After installing, the bot will automatically monitor the heartbeat channel and d
     - Instances field currently has no effect
 
 - **/profile get `discord_id`**
-    - Display information about user such as activity status, last active date, and total time active
+    - Display information about user:
+        - Friend code
+        - Status/ last active time
+        - Total time farmed
+        - Total packs farmed
+        - Last recorded number of running instances
 
 - **/profile manage `discord_id` `param` `value`** *(Admin only)*
     - Edit a user's friend code, activity status, or time active
     - Value must be `true` or `false` for activity status
+
+- **/stats rerollers**
+    - Displays stats of active rerollers
+
+- **/stats inactive**
+    - Displays last active time of inactive rerollers
 
 - **/usernames**
     - Generates a file with 200 numbered usernames to use in your ahk folder for better alt identification
