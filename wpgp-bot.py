@@ -4,6 +4,7 @@ import json
 import datetime
 import requests
 import base64
+import math
 from discord.ext import tasks
 from dotenv import load_dotenv
 
@@ -68,8 +69,14 @@ async def update_fcids(guild):
                 await member.remove_roles(roleActive)
                 print(f"{member.display_name} is offline!")
             else:
-                await member.add_roles(roleActive)
-                await member.remove_roles(roleInactive)
+                if 'offline' in data[user] and 'Main' in data[user]['offline']:
+                    data[user]['status'] = False
+                    await member.add_roles(roleInactive)
+                    await member.remove_roles(roleActive)
+                    print(f"{member.display_name} main is offline!")
+                else:
+                    await member.add_roles(roleActive)
+                    await member.remove_roles(roleInactive)
         else:
             await member.add_roles(roleInactive)
             await member.remove_roles(roleActive)
@@ -81,38 +88,95 @@ async def update_fcids(guild):
 
 # Generate online info
 def generate_online_info(guild):
-    message_part = []
+    print('Generating online info...')
+    online_part = []
+    offline_part = []
     instances = 0
     width = 40
     for user in data:
+        member_name = guild.get_member(int(user)).display_name
         if data[user]['status']:
-            member_name = guild.get_member(int(user)).display_name
             instance_str = f"{data[user]['instances']} Instance(s)" if 'instances' in data[user] else "N/A Instances"
             if len(member_name) + len(instance_str) > width - 5:
-                member_name = member_name[0:(width - 8)] + "..."
+                member_name = member_name[0:(width - 8 - len(instance_str))] + "..."
             
             rate = '(N/A packs/min)'
             if ('run_time' in data[user] and not data[user]['run_time'] == 0):
                 rate = f"({round(data[user]['packs']['cur'] / data[user]['run_time'] / 60, 2)} packs/min)"
-            message_part.append(f"[{'2;32m' if len(data[user]['offline']) == 0 else '0;33m'}{member_name} [2;37m{' '*(width - 1 - len(member_name) - len(instance_str))}[2;37m{instance_str}\n[2;30m{data[user]['packs']['cur']} packs in {data[user]['run_time'] if 'run_time' in data[user] else 'N/A'}h {rate}")
+            online_part.append(f"[{'2;32m' if len(data[user]['offline']) == 0 else '0;33m'}{member_name} [2;37m{' '*(width - 1 - len(member_name) - len(instance_str))}[2;37m{instance_str}\n[2;30m{data[user]['packs']['cur']} packs in {data[user]['run_time'] if 'run_time' in data[user] else 'N/A'}h {rate}")
             instances += data[user]['instances'] if 'instances' in data[user] else 0
-    return f"```ansi\n[1;34mTotal instances:{' '*(width - 19 - len(str(instances)))} [1;45m[1;37m {instances} [0m\n\n" + '\n'.join(message_part) + "\n```"
+        else:
+            if 'last_on' in data[user]:
+                now = datetime.datetime.now()
+                last_on = datetime.datetime.strptime(data[user]['last_on'], "%Y-%m-%d %H:%M:%S.%f")
+                days_ago = round((now - last_on).days,1)
+            else:
+                days_ago = 'N/A'
+            if len(member_name) + len(f'Last seen {days_ago} days ago') > width - 5:
+                member_name = member_name[0:(width - 8 - len(f'Off for {days_ago} days'))] + "..."
+            
+            if days_ago == 'N/A' or days_ago > 7:
+                style = 41
+            elif days_ago > 3:
+                style = 31
+            else:
+                style = 33
+            
+            tot_packs = (data[user]['packs']['total'] + data[user]['packs']['cur']) if ('packs' in data[user] and 'total' in data[user]['packs']) else 'N/A'
+            hours = data[user]['hours'] if 'hours' in data[user] else 'N/A'
+            offline_part.append(f"[0;{style}m{member_name}[0m{' '*(width - 1 - len(member_name) - len(f'Off for {days_ago} days'))}[0;37mOff for [0;{style}m{days_ago}[0m days\n[2;30mTotal: {tot_packs} in {hours}h")
+            
+
+    
+    parts_per_msg = 15
+    msg_return = []
+    title = f"```ansi\n[1;34mTotal instances:{' '*(width - 19 - len(str(instances)))} [1;45m[1;37m {instances} [0m\n\n"
+    for i in range(math.ceil(len(online_part) / parts_per_msg)):
+        current_part = title if i == 0 else "```ansi\n"
+        if parts_per_msg * (i+1) > len(online_part):
+            current_part += '\n'.join(online_part[parts_per_msg * i :])
+            current_part += "\n```"
+        else:
+            current_part += '\n'.join(online_part[parts_per_msg * i : parts_per_msg * (i+1)])
+            current_part += "\n```"
+        msg_return.append(current_part)
+    
+    for i in range(math.ceil(len(offline_part) / parts_per_msg)):
+        current_part = "```ansi\n"
+        if parts_per_msg * (i+1) > len(offline_part):
+            current_part += '\n'.join(offline_part[parts_per_msg * i :])
+            current_part += "\n```"
+        else:
+            current_part += '\n'.join(offline_part[parts_per_msg * i : parts_per_msg * (i+1)])
+            current_part += "\n```"
+        msg_return.append(current_part)
+
+    return msg_return
 
 # Update status channel
 async def update_status(guild):
     status_channel = guild.get_channel(int(STATUS))
+    msg_txt = generate_online_info(guild)
     if not 'online_message' in serverdata:
+        serverdata['online_message'] = []
+    elif type(serverdata['online_message']) == int:
+        serverdata['online_message'] = [serverdata['online_message']]
+    
+    for i in range(max(len(msg_txt), len(serverdata['online_message']))):
+        if i >= len(serverdata['online_message']):
+            online_message = await status_channel.send(msg_txt[i])
+            serverdata['online_message'].append(int(online_message.id))
 
-        online_message = await status_channel.send(generate_online_info(guild))
-        serverdata['online_message'] = int(online_message.id)
-
-        # Update logged data
-        json_file = open('serverdata.json', 'w')
-        json.dump(serverdata, json_file)
-        json_file.close()
-    else:
-        online_message = await status_channel.fetch_message(serverdata['online_message'])
-        await online_message.edit(content=generate_online_info(guild))
+            # Update logged data
+            json_file = open('serverdata.json', 'w')
+            json.dump(serverdata, json_file)
+            json_file.close()
+        elif i >= len(msg_txt):
+            online_message = await status_channel.fetch_message(serverdata['online_message'][i])
+            await online_message.edit(content="```\n```")
+        else:
+            online_message = await status_channel.fetch_message(serverdata['online_message'][i])
+            await online_message.edit(content=msg_txt[i])
     
 # Bot stuff
 intents = discord.Intents.default()
@@ -208,24 +272,6 @@ async def manage(ctx, discord_id: str, param: str, value: str):
     await ctx.respond(f"✅ {param} updated!")
     await update_fcids(ctx.guild)
 
-stats = bot.create_group("stats", "View server statistics")
-
-# Command: Get stats of inactive rerollers
-@stats.command(description="Get stats of inactive rerollers")
-async def inactive(ctx):
-    message_part = []
-    for user in data:
-        if not data[user]['status']:
-            member = ctx.guild.get_member(int(user))
-            if 'last_on' in data[user]:
-                now = datetime.datetime.now()
-                last_on = datetime.datetime.strptime(data[user]['last_on'], "%Y-%m-%d %H:%M:%S.%f")
-                days_ago = round((now - last_on).days,1)
-            else:
-                days_ago = 'N/A'
-            message_part.append(f"**{member.display_name}**\tLast on: **{days_ago}** days ago")
-    await ctx.respond('\n'.join(message_part))
-
 # Command: Generate usernames.txt for self
 @bot.command(description="Generate usernames.txt for yourself")
 async def usernames(ctx):
@@ -270,7 +316,6 @@ async def offline(ctx):
 
     await ctx.respond("✅ Status set to offline!")
     await update_fcids(ctx.guild)
-    await update_status(ctx.guild)
 
 
 # Admin command: Get full user data (for debug)
@@ -346,6 +391,7 @@ async def on_message(message):
                 if not len(offlines) == len(data[online_id]['offline']):
                     offlines_str = ', '.join(offlines)
                     await message.channel.send(f"<@{online_id}> Instance(s) offline: {offlines_str}")
+                data[online_id]['offline'] = offlines
 
             # Update logged data
             json_file = open('data.json', 'w')
@@ -355,8 +401,6 @@ async def on_message(message):
             print(f"{message.guild.get_member(int(online_id)).display_name} is online!")
             await message.add_reaction("❤️")
             await update_fcids(message.guild)
-            await update_status(message.guild)
-
 
     # Pack alert channel
     elif message.channel.id == int(PACKALERT):
@@ -385,17 +429,17 @@ async def on_ready():
     print('---------------------\n')
     
     # Set bot status
-    await bot.change_presence(activity=discord.Game(name="v1.2b"))
+    await bot.change_presence(activity=discord.Game(name="v1.2"))
 
     # Begin auto update loop
     auto_update.start()
     guild = bot.get_guild(int(GUILD))
     await update_fcids(guild)
-    await update_status(guild)
 
 # Auto update loop
 @tasks.loop(minutes=2)
 async def auto_update():
     await update_github()
+    await update_status(bot.get_guild(int(GUILD)))
 
 bot.run(DISCORD_TOKEN)

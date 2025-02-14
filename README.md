@@ -1,8 +1,10 @@
-### Version 1.2b
+### Version 1.2
 
 # Features
 
 After installing, the bot will automatically monitor the heartbeat channel and determine which discord members are actively rerolling or not. Then, it will assign roles and update an `ids.txt` file on github, which is referenced by all AHK Farmers in the server! This allows for seamless joining/leaving sessions with no interaction apart from starting / stopping the ahk script.
+
+The bot also organizes all user data into one discord channel, summarizing packs found, hours grinded, instances running, etc.
 
 # Usage Instructions
 
@@ -36,12 +38,6 @@ After installing, the bot will automatically monitor the heartbeat channel and d
     - Edit a user's friend code, activity status, or time active
     - Value must be `true` or `false` for activity status
 
-- **/stats rerollers**
-    - Displays stats of active rerollers
-
-- **/stats inactive**
-    - Displays last active time of inactive rerollers
-
 - **/usernames**
     - Generates a file with 200 numbered usernames to use in your ahk folder for better alt identification
 
@@ -62,6 +58,7 @@ After installing, the bot will automatically monitor the heartbeat channel and d
     - Forum channel (For threads)
         - Three tags in said channel (alive, dead, and unknown)
     - Active and Inactive user roles
+    - Status channel for bot to store stats
 
 ## Step 1: Clone the Repository
 ```bash
