@@ -62,7 +62,7 @@ The bot also organizes all user data into one discord channel, summarizing packs
 
 ## Step 1: Clone the Repository
 ```bash
-git clone https://github.com/Dan1elTheMan1el/tcgpbot.git
+git clone https://github.com/Dan1elTheMan1el/wpgp-bot.git
 ```
 
 ## Step 2: Create a GitHub Repository / Token
