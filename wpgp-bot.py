@@ -43,15 +43,17 @@ async def update_github():
     headers = { 'Authorization': f'token {GITHUB_TOKEN}' }
     response = requests.get(url, headers=headers)
     sha = response.json()['sha']
-
-    # Update the ids.txt file
-    commitData = {
-        'message': 'Updated ids.txt from Discord',
-        'content': base64.b64encode(text.encode()).decode(),
-        'sha': sha
-    }
-    response = requests.put(url, headers=headers, json=commitData)
-    print('Updated GitHub!')
+    if base64.b64decode(response.json()['content'].replace('\n','')).decode() == text:
+        print('No change in GitHub!')
+    else:
+        # Update the ids.txt file
+        commitData = {
+            'message': 'Updated ids.txt from Discord',
+            'content': base64.b64encode(text.encode()).decode(),
+            'sha': sha
+        }
+        response = requests.put(url, headers=headers, json=commitData)
+        print('Updated GitHub!')
 
 # Update internal friend code status
 async def update_fcids(guild):
@@ -429,7 +431,7 @@ async def on_ready():
     print('---------------------\n')
     
     # Set bot status
-    await bot.change_presence(activity=discord.Game(name="v1.2"))
+    await bot.change_presence(activity=discord.Game(name="v1.2.1"))
 
     # Begin auto update loop
     auto_update.start()
