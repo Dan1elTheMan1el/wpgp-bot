@@ -90,7 +90,6 @@ async def update_fcids(guild):
 
 # Generate online info
 def generate_online_info(guild):
-    print('Generating online info...')
     online_part = []
     offline_part = []
     instances = 0
@@ -128,8 +127,6 @@ def generate_online_info(guild):
             hours = data[user]['hours'] if 'hours' in data[user] else 'N/A'
             offline_part.append(f"[0;{style}m{member_name}[0m{' '*(width - 1 - len(member_name) - len(f'Off for {days_ago} days'))}[0;37mOff for [0;{style}m{days_ago}[0m days\n[2;30mTotal: {tot_packs} in {hours}h")
             
-
-    
     parts_per_msg = 15
     msg_return = []
     title = f"```ansi\n[1;34mTotal instances:{' '*(width - 19 - len(str(instances)))} [1;45m[1;37m {instances} [0m\n\n"
@@ -141,7 +138,7 @@ def generate_online_info(guild):
         else:
             current_part += '\n'.join(online_part[parts_per_msg * i : parts_per_msg * (i+1)])
             current_part += "\n```"
-        msg_return.append(current_part)
+        msg_return.insert(0,current_part)
     
     for i in range(math.ceil(len(offline_part) / parts_per_msg)):
         current_part = "```ansi\n"
@@ -151,34 +148,49 @@ def generate_online_info(guild):
         else:
             current_part += '\n'.join(offline_part[parts_per_msg * i : parts_per_msg * (i+1)])
             current_part += "\n```"
-        msg_return.append(current_part)
+        msg_return.insert(0,current_part)
 
     return msg_return
 
 # Update status channel
 async def update_status(guild):
     status_channel = guild.get_channel(int(STATUS))
+    print('Generating online info... ', end='', flush=True)
     msg_txt = generate_online_info(guild)
     if not 'online_message' in serverdata:
         serverdata['online_message'] = []
     elif type(serverdata['online_message']) == int:
         serverdata['online_message'] = [serverdata['online_message']]
     
-    for i in range(max(len(msg_txt), len(serverdata['online_message']))):
-        if i >= len(serverdata['online_message']):
-            online_message = await status_channel.send(msg_txt[i])
-            serverdata['online_message'].append(int(online_message.id))
+    if len(serverdata['online_message']) < max(20,len(msg_txt)):
+        print('Remaking status channel... ', end='', flush=True)
+        for message_id in serverdata['online_message']:
+            online_message = await status_channel.fetch_message(message_id)
+            await online_message.delete()
+        
+        new_messages = []
+        for i in range(max(20,len(msg_txt))):
+            online_message = await status_channel.send("``` ```")
+            new_messages.append(int(online_message.id))
+        serverdata['online_message'] = new_messages[::-1]
 
-            # Update logged data
-            json_file = open('serverdata.json', 'w')
-            json.dump(serverdata, json_file)
-            json_file.close()
-        elif i >= len(msg_txt):
+        # Update logged data
+        json_file = open('serverdata.json', 'w')
+        json.dump(serverdata, json_file)
+        json_file.close()
+    
+    print('Pasting info... ', end='', flush=True)
+    for i in range(len(serverdata['online_message'])):
+        if i >= len(msg_txt):
             online_message = await status_channel.fetch_message(serverdata['online_message'][i])
-            await online_message.edit(content="```\n```")
+            if online_message.content != "``` ```":
+                await online_message.edit(content="``` ```")
+            else:
+                break
         else:
             online_message = await status_channel.fetch_message(serverdata['online_message'][i])
             await online_message.edit(content=msg_txt[i])
+    print('Done!')
     
 # Bot stuff
 intents = discord.Intents.default()
@@ -431,7 +443,7 @@ async def on_ready():
     print('---------------------\n')
     
     # Set bot status
-    await bot.change_presence(activity=discord.Game(name="v1.2.1"))
+    await bot.change_presence(activity=discord.Game(name="v1.2.2"))
 
     # Begin auto update loop
     auto_update.start()
