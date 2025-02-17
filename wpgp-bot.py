@@ -443,6 +443,7 @@ async def on_message(message):
                 acc_name = lines[1].split(' (')[0]
                 acc_fc = lines[1].split(' (')[1][0:16]
                 packs_info = lines[2].split(' God')[0]
+                packs_num = lines[3].split('P]')[0].split("][")[1]
                 file = message.attachments[0].url
                 roleActive = discord.utils.get(message.guild.roles, name="Active")
                 pack_forum = message.guild.get_channel(int(PACKFORUM))

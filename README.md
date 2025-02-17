@@ -17,14 +17,13 @@ The bot also organizes all user data into one discord channel, summarizing packs
 - Discord Webhook URL: *Webhook created in Pack Alert channel*
 
 - Discord Heartbeat: ✅
-    - Box 1: *User's discord ID*
-    - Box 2: *Webhook created in Heartbeat channel*
+    - Name: *User's discord ID*
+    - Webhook URL: *Webhook created in Heartbeat channel*
 
 ## Commands
 
-- **/profile set `friend_code` `instances`**
+- **/profile set `friend_code`**
     - Connect PTCGP friend code to discord ID
-    - Instances field currently has no effect
 
 - **/profile get `discord_id`**
     - Display information about user:
