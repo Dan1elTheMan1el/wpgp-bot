@@ -61,6 +61,8 @@ async def update_fcids(guild):
     roleInactive = discord.utils.get(guild.roles, name="Inactive")
     for user in data:
         member = guild.get_member(int(user))
+        if not member:
+            continue
         if data[user]['status']:
             # Check if last heartbeat was too long ago
             now = datetime.datetime.now()
@@ -95,7 +97,10 @@ def generate_online_info(guild):
     instances = 0
     width = 40
     for user in data:
-        member_name = guild.get_member(int(user)).display_name
+        member = guild.get_member(int(user))
+        if not member:
+            continue
+        member_name = member.display_name
         if data[user]['status']:
             instance_str = f"{data[user]['instances']} Instance(s)" if 'instances' in data[user] else "N/A Instances"
             if len(member_name) + len(instance_str) > width - 5:
@@ -376,7 +381,7 @@ async def on_message(message):
             data[online_id]['last_on'] = message.created_at.strftime("%Y-%m-%d %H:%M:%S.%f")
 
             # Update user instance count
-            data[online_id]['instances'] = len(lines[1].split(',')) - 1
+            data[online_id]['instances'] = len(lines[1].split(',')) - (1 if 'Main' in lines[1] else 0)
 
             # Update current roll time
             data[online_id]['run_time'] = round(int(lines[3].split('Time: ')[1].split('m')[0])/60.0,1)
@@ -424,7 +429,7 @@ async def on_message(message):
             # Ignore other alerts in the channel
             if len(lines) < 3:
                 return
-            if lines[2].startswith("Found a God Pack"):
+            if lines[2].startswith("Found a God Pack"): # Pre 6.3.6
                 acc_name = lines[1].split('(')[0]
                 acc_fc = lines[1].split('(')[1][0:16]
                 packs_num = lines[2].split('(')[1][0]
@@ -434,6 +439,16 @@ async def on_message(message):
                 tag = pack_forum.get_tag(int(PACKTAG))
                 packnumdata = [(1,1),(5,9),(8,15),(11,21)]
                 await pack_forum.create_thread(name=f"{acc_name} [{packs_num}P]", content=f"{roleActive.mention}\nClear your friends list and check your wonder pick!\nFriend code: `{acc_fc}`\nUse `/gp_status` to update thread tag\nOther packs needed for 95% confidence of dud: **{packnumdata[int(packs_num)-1][0]}**\nOther packs needed for 99.7% confidence of dud: **{packnumdata[int(packs_num)-1][1]}**\n{file}", applied_tags=[tag])
+            elif "]  God pack" in lines[2]:
+                acc_name = lines[1].split(' (')[0]
+                acc_fc = lines[1].split(' (')[1][0:16]
+                packs_info = lines[2].split(' God')[0]
+                file = message.attachments[0].url
+                roleActive = discord.utils.get(message.guild.roles, name="Active")
+                pack_forum = message.guild.get_channel(int(PACKFORUM))
+                tag = pack_forum.get_tag(int(PACKTAG))
+                packnumdata = [(1,1),(5,9),(8,15),(11,21)]
+                await pack_forum.create_thread(name=f"{acc_name} {packs_info}", content=f"{roleActive.mention}\nClear your friends list and check your wonder pick!\nFriend code: `{acc_fc}`\nUse `/gp_status` to update thread tag\nOther packs needed for 95% confidence of dud: **{packnumdata[int(packs_num)-1][0]}**\nOther packs needed for 99.7% confidence of dud: **{packnumdata[int(packs_num)-1][1]}**\n{file}", applied_tags=[tag])
 
 # Event on bot startup
 @bot.event
@@ -443,7 +458,7 @@ async def on_ready():
     print('---------------------\n')
     
     # Set bot status
-    await bot.change_presence(activity=discord.Game(name="v1.2.2"))
+    await bot.change_presence(activity=discord.Game(name="v1.2.3"))
 
     # Begin auto update loop
     auto_update.start()
